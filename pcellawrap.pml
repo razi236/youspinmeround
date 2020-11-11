@@ -70,8 +70,8 @@ bool in_press;
 // sensor is triggered.
 proctype feedbelt_motor()
 {
-  do
-  :: progress: atomic {
+  progress: do
+  :: atomic {
      if
      :: full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
        if
@@ -86,8 +86,8 @@ proctype feedbelt_motor()
 
 proctype depositbelt_motor()
 {
-  do
-  :: progress: atomic {
+  progress: do
+  :: atomic {
      if
      :: full(depositbelt) ->  depositbelt?<depositbelt_sensor_triggered>;
        if
