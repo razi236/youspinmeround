@@ -71,11 +71,12 @@ bool in_press;
 proctype feedbelt_motor()
 {
   do
-  :: if
-     :: full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
+  ::
+     if
+     :: full(feedbelt) -> progress: feedbelt?<feedbelt_sensor_triggered>;
        if
-       :: feedbelt_sensor_triggered -> progress: skip;
-       :: else                      -> feedbelt ?_;
+       :: !feedbelt_sensor_triggered -> feedbelt ?_;
+       :: else -> skip;
        fi
      :: nfull(feedbelt) -> feedbelt ! false;
      fi
@@ -85,11 +86,12 @@ proctype feedbelt_motor()
 proctype depositbelt_motor()
 {
   do
-  :: if
-     :: full(depositbelt) -> depositbelt?<depositbelt_sensor_triggered>;
+  ::
+     if
+     :: full(depositbelt) -> progress: depositbelt?<depositbelt_sensor_triggered>;
        if
-       :: depositbelt_sensor_triggered -> progress: skip;
-       :: else                         -> depositbelt ?_;
+       :: !depositbelt_sensor_triggered -> depositbelt ?_;
+       :: else -> skip;
        fi
      :: nfull(depositbelt) -> depositbelt ! false;
      fi
@@ -102,7 +104,7 @@ proctype table()
   do
   :: (table_state == load_by_feedbelt &&
       !on_table &&
-      feedbelt_sensor_triggered)             -> feedbelt ? on_table;
+      feedbelt_sensor_triggered)             -> progress: feedbelt ? on_table;
   :: (table_state == load_by_feedbelt &&
       on_table)                              -> table_state = enter_unload_to_arm1;
   :: (table_state == enter_unload_to_arm1)   -> table_state = unload_to_arm1;
@@ -155,7 +157,7 @@ proctype robot() {
                                                          robot_state = enter_arm2_at_depositbelt;
   :: (robot_state == enter_arm2_at_depositbelt)       -> robot_state = arm2_at_depositbelt;
   :: (robot_state == arm2_at_depositbelt && in_arm2)  -> atomic {depositbelt ! true; in_arm2 = false;}
-  :: (robot_state == arm2_at_depositbelt && !in_arm2) -> robot_state = enter_arm1_at_table;
+  :: (robot_state == arm2_at_depositbelt && !in_arm2) -> progress: robot_state = enter_arm1_at_table;
   od  
 }
 
@@ -184,7 +186,7 @@ proctype press()
   do
   :: (press_state == load_by_arm1 && in_press)    -> press_state = pressing;
   :: (press_state == pressing)                    -> press_state = unload_by_arm2;
-  :: (press_state == unload_by_arm2 && !in_press) -> press_state = load_by_arm1; 
+  :: (press_state == unload_by_arm2 && !in_press) -> progress: press_state = load_by_arm1; 
   od
 }
 
@@ -214,7 +216,6 @@ init
     run press();
     run crane();
   }
- 
 }
 
 
