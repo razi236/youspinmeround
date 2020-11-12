@@ -2,17 +2,15 @@ chan feedbelt = [5] of {bool};
 bool feedbelt_sensor_triggered;
 active proctype feedbelt_motor()
 {
-  progress: do
-  :: atomic {
-     if
-     :: full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
+  do
+  :: if
+     :: full(feedbelt) -> progress: atomic { feedbelt?<feedbelt_sensor_triggered>;
        if
        :: !feedbelt_sensor_triggered -> feedbelt ?_;
        :: else -> skip;
-       fi
+       fi }
      :: nfull(feedbelt) -> feedbelt ! false;
      fi
-     }
   od
 }
 
