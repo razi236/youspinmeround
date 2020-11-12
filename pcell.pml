@@ -186,7 +186,7 @@ proctype crane()
          in_gripper)                         -> feedbelt ! true; in_gripper = false;
      :: (crane_state == at_depositbelt &&
          !in_gripper &&
-         depositbelt_sensor_triggered)       -> depositbelt_sensor_triggered = false; in_gripper = true;
+         depositbelt_sensor_triggered)       -> depositbelt?in_gripper
      :: (crane_state == at_depositbelt &&
          in_gripper)                         -> progress: crane_state = move_to_feedbelt;
      fi
