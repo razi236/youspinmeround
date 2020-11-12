@@ -71,32 +71,30 @@ bool in_press;
 proctype feedbelt_motor()
 {
   progress: do
-  :: atomic {
-     if
-     :: full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
+  :: if
+     :: full(feedbelt) -> atomic { feedbelt?<feedbelt_sensor_triggered>;
        if
        :: !feedbelt_sensor_triggered -> feedbelt ?_;
        :: else -> skip;
        fi
+       }
      :: nfull(feedbelt) -> feedbelt ! false;
      fi
-     }
   od
 }
 
 proctype depositbelt_motor()
 {
   progress: do
-  :: atomic {
-     if
-     :: full(depositbelt) ->  depositbelt?<depositbelt_sensor_triggered>;
+  :: if
+     :: full(depositbelt) -> atomic { depositbelt?<depositbelt_sensor_triggered>;
        if
        :: !depositbelt_sensor_triggered -> depositbelt ?_;
        :: else -> skip;
        fi
+       }
      :: nfull(depositbelt) -> depositbelt ! false;
      fi
-     }
   od
 }
 
@@ -104,22 +102,18 @@ proctype table()
 {
 
   do 
-  :: atomic {
-     if
-     :: (table_state == load_by_feedbelt &&
-         !on_table &&
-         feedbelt_sensor_triggered)             -> progress: feedbelt ? on_table;
-     :: (table_state == load_by_feedbelt &&
-         on_table)                              -> table_state = enter_unload_to_arm1; 
-     :: (table_state == enter_unload_to_arm1)   -> table_state = unload_to_arm1;
-     :: (table_state == unload_to_arm1 &&
-         on_table &&
-         robot_state == arm1_at_table)          -> on_table = false; in_arm1 = true;
-     :: (table_state == unload_to_arm1 &&
-         !on_table)                             -> table_state = enter_load_by_feedbelt;
-     :: (table_state == enter_load_by_feedbelt) -> table_state = load_by_feedbelt;
-     fi
-     }
+  :: (table_state == load_by_feedbelt &&
+      !on_table &&
+      feedbelt_sensor_triggered)             -> progress: feedbelt ? on_table;
+  :: (table_state == load_by_feedbelt &&
+      on_table)                              -> table_state = enter_unload_to_arm1; 
+  :: (table_state == enter_unload_to_arm1)   -> table_state = unload_to_arm1;
+  :: (table_state == unload_to_arm1 &&
+      on_table &&
+      robot_state == arm1_at_table)          -> atomic { on_table = false; in_arm1 = true; }
+  :: (table_state == unload_to_arm1 &&
+      !on_table)                             -> table_state = enter_load_by_feedbelt;
+  :: (table_state == enter_load_by_feedbelt) -> table_state = load_by_feedbelt;
   od
 } 
 
@@ -140,34 +134,30 @@ proctype table()
 
 proctype robot() {
   do
-  :: atomic {
-      if
-      ::(robot_state == enter_arm1_at_table &&
-         !in_arm1 &&
-         table_state == unload_to_arm1)                  -> robot_state = arm1_at_table;
-      :: (robot_state == arm1_at_table &&
-          !in_arm1 &&
-          table_state == unload_to_arm1 &&
-          on_table)                                       -> in_arm1 = true; on_table = false;
-      :: (robot_state == arm1_at_table &&
-          in_arm1)                                        -> robot_state = enter_arm1_at_press;
-      :: (robot_state == enter_arm1_at_press &&
-          press_state == load_by_arm1 &&
-          in_arm1)                                        -> robot_state = arm1_at_press;
-      :: (robot_state == arm1_at_press &&
-          in_arm1)                                        -> in_arm1 = false; in_press = true;
-      :: (robot_state == arm1_at_press &&
-          !in_arm1)                                       -> robot_state = enter_arm2_at_press; 
-      :: (robot_state == enter_arm2_at_press &&
-          press_state == unload_by_arm2 &&
-          in_press)                                       -> robot_state = arm2_at_press;
-      :: (robot_state == arm2_at_press)                   -> in_arm2 = true; in_press = false;
-                                                             robot_state = enter_arm2_at_depositbelt;
-      :: (robot_state == enter_arm2_at_depositbelt)       -> robot_state = arm2_at_depositbelt;
-      :: (robot_state == arm2_at_depositbelt && in_arm2)  -> depositbelt ! true; in_arm2 = false;
-      :: (robot_state == arm2_at_depositbelt && !in_arm2) -> progress: robot_state = enter_arm1_at_table;
-      fi
-      }
+  ::(robot_state == enter_arm1_at_table &&
+     !in_arm1 &&
+     table_state == unload_to_arm1)                   -> robot_state = arm1_at_table;
+  :: (robot_state == arm1_at_table &&
+      !in_arm1 &&
+      table_state == unload_to_arm1 &&
+      on_table)                                       -> atomic { in_arm1 = true; on_table = false; }
+  :: (robot_state == arm1_at_table &&
+      in_arm1)                                        -> robot_state = enter_arm1_at_press;
+  :: (robot_state == enter_arm1_at_press &&
+      press_state == load_by_arm1 &&
+      in_arm1)                                        -> robot_state = arm1_at_press;
+  :: (robot_state == arm1_at_press &&
+      in_arm1)                                        -> atomic { in_arm1 = false; in_press = true; }
+  :: (robot_state == arm1_at_press &&
+      !in_arm1)                                       -> robot_state = enter_arm2_at_press; 
+  :: (robot_state == enter_arm2_at_press &&
+      press_state == unload_by_arm2 &&
+      in_press)                                       -> robot_state = arm2_at_press;
+  :: (robot_state == arm2_at_press)                   -> atomic { in_arm2 = true; in_press = false;
+                                                                  robot_state = enter_arm2_at_depositbelt; }
+  :: (robot_state == enter_arm2_at_depositbelt)       -> robot_state = arm2_at_depositbelt;
+  :: (robot_state == arm2_at_depositbelt && in_arm2)  -> atomic { depositbelt ! true; in_arm2 = false; }
+  :: (robot_state == arm2_at_depositbelt && !in_arm2) -> progress: robot_state = enter_arm1_at_table;
   od  
 }
 
@@ -175,22 +165,18 @@ proctype robot() {
 // just endlessly picks sheats from depositbelt and places them in feedbelt
 proctype crane()
 {
-  do
-  :: atomic {
-     if
-     :: (crane_state == move_to_feedbelt)    -> crane_state = at_feedbelt;
-     :: (crane_state == move_to_depositbelt) -> crane_state = at_depositbelt;
-     :: (crane_state == at_feedbelt &&
-         !in_gripper)                        -> crane_state = move_to_depositbelt;
-     :: (crane_state == at_feedbelt &&
-         in_gripper)                         -> feedbelt ! true; in_gripper = false;
-     :: (crane_state == at_depositbelt &&
-         !in_gripper &&
-         depositbelt_sensor_triggered)       -> depositbelt_sensor_triggered = false; in_gripper = true;
-     :: (crane_state == at_depositbelt &&
-         in_gripper)                         -> progress: crane_state = move_to_feedbelt;
-     fi
-     }
+  do 
+  :: (crane_state == move_to_feedbelt)    -> crane_state = at_feedbelt;
+  :: (crane_state == move_to_depositbelt) -> crane_state = at_depositbelt;
+  :: (crane_state == at_feedbelt &&
+      !in_gripper)                        -> crane_state = move_to_depositbelt;
+  :: (crane_state == at_feedbelt &&
+      in_gripper)                         -> atomic { feedbelt ! true; in_gripper = false; }
+  :: (crane_state == at_depositbelt &&
+      !in_gripper &&
+      depositbelt_sensor_triggered)       -> depositbelt?in_gripper
+  :: (crane_state == at_depositbelt &&
+      in_gripper)                         -> progress: crane_state = move_to_feedbelt;
   od
 }
 
@@ -198,19 +184,14 @@ proctype crane()
 proctype press()
 {
   do
-  :: atomic {
-    if
-    :: (press_state == load_by_arm1 && in_press)    -> press_state = pressing;
-    :: (press_state == pressing)                    -> press_state = unload_by_arm2;
-    :: (press_state == unload_by_arm2 && !in_press) -> progress: press_state = load_by_arm1;
-    fi
-    }
+  :: (press_state == load_by_arm1 && in_press)    -> press_state = pressing;
+  :: (press_state == pressing)                    -> press_state = unload_by_arm2;
+  :: (press_state == unload_by_arm2 && !in_press) -> progress: press_state = load_by_arm1;
   od
 }
 
 init
 {
-  atomic {
     table_state = load_by_feedbelt;
     robot_state = arm1_at_table;
     press_state = load_by_arm1;
@@ -244,7 +225,6 @@ init
     run robot();
     run press();
     run crane();
-  }
 }
 
 
