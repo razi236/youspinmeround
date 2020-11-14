@@ -209,8 +209,7 @@ proctype press()
 }
 
 init
-{
-  atomic {
+{       
     table_state = load_by_feedbelt;
     robot_state = arm1_at_table;
     press_state = load_by_arm1;
@@ -244,7 +243,6 @@ init
     run robot();
     run press();
     run crane();
-  }
 }
 
 
