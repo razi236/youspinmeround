@@ -1,10 +1,10 @@
 chan feedbelt = [5] of {bool};
 bool feedbelt_sensor_triggered;
 
-// #define deadlock 1
+//#define deadlock 1
 
 #ifndef deadlock
-active proctype feedbelt_motor()
+proctype feedbelt_motor()
 {
   progress: do
   :: atomic {
@@ -20,7 +20,7 @@ active proctype feedbelt_motor()
   od
 }
 #else
-active proctype feedbelt_motor()
+proctype feedbelt_motor()
 {
   progress: do
   :: if
@@ -52,4 +52,15 @@ active proctype reader()
  od
 }
 
+init {
+  run feedbelt_motor();
+  feedbelt!false;
+  feedbelt!false;
+  feedbelt!false;
+  feedbelt!false;
+  feedbelt!false;
+  
+  run writer();
+  run reader();
+}
 
