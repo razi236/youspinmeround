@@ -7,20 +7,28 @@ active proctype feedbelt_motor()
      if
      :: full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
        if
-       :: !feedbelt_sensor_triggered -> feedbelt ?_;
-       :: else -> skip;
+       :: !feedbelt_sensor_triggered -> feedbelt ?_; printf("blank discard\n")
+       :: else -> skip; printf("skip\n")
        fi
-     :: nfull(feedbelt) -> feedbelt ! false;
+     :: nfull(feedbelt) -> feedbelt ! false; printf("filling\n")
      fi
      }
   od
 }
 
-active proctype adder()
+active proctype writer()
 {
 
  do
- :: true -> feedbelt!true
+ :: true -> feedbelt!true; printf("writer writes\n")
+ od
+}
+
+active proctype reader()
+{
+
+ do
+ :: feedbelt_sensor_triggered -> feedbelt?_ ; printf("reader reads\n")
  od
 }
 
