@@ -1,22 +1,20 @@
 chan feedbelt = [5] of {bool};
 bool feedbelt_sensor_triggered;
 
-//#define deadlock 1
+// #define deadlock 1
 
 #ifndef deadlock
 proctype feedbelt_motor()
 {
   progress: do
-  :: atomic {
-     if
-     :: full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
+  :: if
+     :: atomic { full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
        if
        :: !feedbelt_sensor_triggered -> feedbelt ?_; printf("blank discard\n")
        :: else -> skip; printf("skip\n")
-       fi
-     :: nfull(feedbelt) -> feedbelt ! false; printf("filling\n")
+       fi }
+     :: atomic { nfull(feedbelt) -> feedbelt ! false; printf("filling\n")}
      fi
-     }
   od
 }
 #else
@@ -24,7 +22,7 @@ proctype feedbelt_motor()
 {
   progress: do
   :: if
-     :: full(feedbelt) -> atomic { feedbelt?<feedbelt_sensor_triggered>;
+     :: atomic { full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
        if
        :: !feedbelt_sensor_triggered -> feedbelt ?_; printf("blank discard\n")
        :: else -> skip; printf("skip\n")
