@@ -85,7 +85,7 @@ proctype feedbelt_motor()
        :: !feedbelt_sensor_triggered -> feedbelt ?_
        :: else -> skip;
        fi }
-     :: atomic { full(feedbelt) -> feedbelt ! false }
+     :: atomic { nfull(feedbelt) -> feedbelt ! false }
      fi
   od
 }
@@ -100,7 +100,7 @@ proctype depositbelt_motor()
        :: else -> skip
        fi }
      :: atomic { nfull(depositbelt) -> depositbelt ! false }
-     fi 
+     fi
   od
 }
 
@@ -176,8 +176,8 @@ proctype crane()
   :: (crane_state == move_to_depositbelt) -> crane_state = at_depositbelt
   :: (crane_state == at_feedbelt &&
       !in_gripper)                        -> crane_state = move_to_depositbelt
-  :: (crane_state == at_feedbelt &&
-      in_gripper)                         -> atomic { feedbelt ! true; in_gripper = false }
+  :: atomic { (crane_state == at_feedbelt &&
+      in_gripper)                         -> feedbelt ! true; in_gripper = false }
   :: (crane_state == at_depositbelt &&
       !in_gripper &&
       depositbelt_sensor_triggered)       -> depositbelt?in_gripper
