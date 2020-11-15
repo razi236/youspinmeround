@@ -50,6 +50,7 @@ mtype:press press_state;
 mtype:crane crane_state;
 
 bool on_table;
+
 bool feedbelt_sensor_triggered;
 bool depositbelt_sensor_triggered;
 bool in_gripper;
@@ -69,14 +70,15 @@ bool in_press;
 // empty belts spinning as progress or simply the waiting when the
 // sensor is triggered.
 
-// alternative implementation of the sensors could be as shown below, in which case we
-// can remove the atomic in the belt motors because we no longer need to set bools
+// alternative implementation of the sensors could be as shown below,
+// in which case we can remove the need to set bools  
+// 
 // #define feedbelt_sensor_triggered (feedbelt?[true])
 // #define depositbelt_sensor_triggered (depositbelt?[true])
 
 proctype feedbelt_motor()
 {
-  do
+  progress: do
   :: if
      :: atomic { full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
        if
@@ -84,14 +86,13 @@ proctype feedbelt_motor()
        :: else -> skip;
        fi }
      :: atomic { full(feedbelt) -> feedbelt ! false }
-     fi ;
-     progress: skip
+     fi
   od
 }
 
 proctype depositbelt_motor()
 {
-  do
+  progress: do
   :: if
      :: atomic { full(depositbelt) -> depositbelt?<depositbelt_sensor_triggered>;
        if
@@ -99,14 +100,12 @@ proctype depositbelt_motor()
        :: else -> skip
        fi }
      :: atomic { nfull(depositbelt) -> depositbelt ! false }
-     fi ;
-     progress: skip
+     fi 
   od
 }
 
 proctype table()
 {
-
   do 
   :: (table_state == load_by_feedbelt &&
       !on_table &&
@@ -114,9 +113,10 @@ proctype table()
   :: (table_state == load_by_feedbelt &&
       on_table)                              -> table_state = enter_unload_to_arm1
   :: (table_state == enter_unload_to_arm1)   -> table_state = unload_to_arm1
-  :: (table_state == unload_to_arm1 &&
-      on_table &&
-      robot_state == arm1_at_table)          -> atomic { on_table = false; in_arm1 = true }
+  :: atomic {
+       (table_state == unload_to_arm1 &&
+        on_table &&
+        robot_state == arm1_at_table)        -> on_table = false; in_arm1 = true }
   :: (table_state == unload_to_arm1 &&
       !on_table)                             -> table_state = enter_load_by_feedbelt
   :: (table_state == enter_load_by_feedbelt) -> table_state = load_by_feedbelt
@@ -241,6 +241,7 @@ ltl advance_from_table {(<>on_table -> <>in_arm1 )}
 
 
 // Liveness checks
+
 ltl piece_on_table {([]<>on_table)}
 ltl piece_in_arm1 {([]<>in_arm1)}
 ltl piece_in_arm2 {([]<>in_arm2)}
@@ -249,4 +250,11 @@ ltl piece_in_press {([]<>in_press)}
 ltl piece_on_feedbelt_sensor {([]<>feedbelt_sensor_triggered)}
 ltl piece_on_depositbelt_sensor {([]<>depositbelt_sensor_triggered)}
 
-ltl piece_somewhere { ([]<>( on_table || feedbelt_sensor_triggered ||  depositbelt_sensor_triggered || in_gripper || in_arm1 || in_arm2 || in_press ) ) }
+
+ltl piece_somewhere { ([]<>on_table &&
+                       []<>feedbelt_sensor_triggered &&
+                       []<>depositbelt_sensor_triggered &&
+                       []<>in_gripper &&
+                       []<>in_arm1 &&
+                       []<>in_arm2 &&
+                       []<>in_press )}
