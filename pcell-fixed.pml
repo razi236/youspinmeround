@@ -251,7 +251,7 @@ ltl piece_on_feedbelt_sensor {([]<>feedbelt_sensor_triggered)}
 ltl piece_on_depositbelt_sensor {([]<>depositbelt_sensor_triggered)}
 
 
-ltl piece_somewhere { ([]<>on_table &&
+ltl piece_everywhere { ([]<>on_table &&
                        []<>feedbelt_sensor_triggered &&
                        []<>depositbelt_sensor_triggered &&
                        []<>in_gripper &&
