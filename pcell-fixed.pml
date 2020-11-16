@@ -50,9 +50,6 @@ mtype:press press_state;
 mtype:crane crane_state;
 
 bool on_table;
-
-bool feedbelt_sensor_triggered;
-bool depositbelt_sensor_triggered;
 bool in_gripper;
 bool in_arm1;
 bool in_arm2;
@@ -70,21 +67,15 @@ bool in_press;
 // empty belts spinning as progress or simply the waiting when the
 // sensor is triggered.
 
-// alternative implementation of the sensors could be as shown below,
-// in which case we can remove the need to set bools  
-// 
-// #define feedbelt_sensor_triggered (feedbelt?[true])
-// #define depositbelt_sensor_triggered (depositbelt?[true])
+
+#define feedbelt_sensor_triggered (full(feedbelt) && feedbelt?[true])
+#define depositbelt_sensor_triggered (full(depositbelt) && depositbelt?[true])
 
 proctype feedbelt_motor()
 {
   progress: do
   :: if
-     :: atomic { full(feedbelt) -> feedbelt?<feedbelt_sensor_triggered>;
-       if
-       :: !feedbelt_sensor_triggered -> feedbelt ?_
-       :: else -> skip;
-       fi }
+     :: atomic { full(feedbelt) && feedbelt?[false] -> feedbelt?_ }
      :: atomic { nfull(feedbelt) -> feedbelt ! false }
      fi
   od
@@ -94,11 +85,7 @@ proctype depositbelt_motor()
 {
   progress: do
   :: if
-     :: atomic { full(depositbelt) -> depositbelt?<depositbelt_sensor_triggered>;
-       if
-       :: !depositbelt_sensor_triggered -> depositbelt ?_
-       :: else -> skip
-       fi }
+     :: atomic { full(depositbelt) && depositbelt?[false] -> depositbelt?_ }
      :: atomic { nfull(depositbelt) -> depositbelt ! false }
      fi
   od
@@ -178,9 +165,9 @@ proctype crane()
       !in_gripper)                        -> crane_state = move_to_depositbelt
   :: atomic { (crane_state == at_feedbelt &&
       in_gripper)                         -> feedbelt ! true; in_gripper = false }
-  :: (crane_state == at_depositbelt &&
+  :: atomic {(crane_state == at_depositbelt &&
       !in_gripper &&
-      depositbelt_sensor_triggered)       -> depositbelt?in_gripper
+      depositbelt_sensor_triggered)       -> depositbelt?in_gripper }
   :: (crane_state == at_depositbelt &&
       in_gripper)                         -> progress: crane_state = move_to_feedbelt
   od
@@ -217,8 +204,6 @@ init
     depositbelt ! false;
 
     
-    //feedbelt_sensor_triggered = false;
-    //depositbelt_sensor_triggered = false;
     on_table = false;
     in_arm1 = false;
     in_arm2 = false;
@@ -237,24 +222,28 @@ init
 
 
 // To check only this do "spin -search -ltl advance_from_table pcell.pml"
-ltl advance_from_table {(<>on_table -> <>in_arm1 )}
+ltl advance_from_table {([]<>on_table -> []<>in_arm1 )}
 
 
-// Liveness checks
+//Should fail with an assertion violation(given only one piece in circulation)
+ltl piece_two_places { [](on_table -> in_gripper) }
 
+// Liveness checks, all should hold
 ltl piece_on_table {([]<>on_table)}
 ltl piece_in_arm1 {([]<>in_arm1)}
 ltl piece_in_arm2 {([]<>in_arm2)}
-ltl piece_in_gripper {([]<>in_gripper)}
+ltl piece_in_gripper {([]<>(in_gripper))}
 ltl piece_in_press {([]<>in_press)}
-ltl piece_on_feedbelt_sensor {([]<>feedbelt_sensor_triggered)}
-ltl piece_on_depositbelt_sensor {([]<>depositbelt_sensor_triggered)}
 
 
 ltl piece_everywhere { ([]<>on_table &&
-                       []<>feedbelt_sensor_triggered &&
-                       []<>depositbelt_sensor_triggered &&
-                       []<>in_gripper &&
-                       []<>in_arm1 &&
-                       []<>in_arm2 &&
-                       []<>in_press )}
+                        []<>in_gripper &&
+                        []<>in_arm1 &&
+                        []<>in_arm2 &&
+                        []<>in_press )}
+
+
+ltl crane_movement1 { <>(crane_state == move_to_feedbelt) U (crane_state == at_feedbelt)  }
+ltl crane_movement2 { <>(crane_state == move_to_depositbelt) U (crane_state == at_depositbelt)  }
+
+
