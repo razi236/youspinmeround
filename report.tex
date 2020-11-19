@@ -1,0 +1,369 @@
+\documentclass[12pt]{article}
+\usepackage{url}
+\usepackage{listings}
+\usepackage{verbatim}
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\@verbatim}
+  {\verbatim@font}
+  {\verbatim@font\small}
+  {}{}
+\makeatother
+\lstset{language=promela,basicstyle=\footnotesize}
+\title{Modelling in PROMELA}
+\author{
+  Ole Jørgen Abusdal
+  \and
+  Muhammed Rizwan Ali
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+\section*{Model description}
+As we have considered this an exercise in understanding PROMELA, Spin and model checking with LTL
+as opposed to making a very realistic model we have opted for a very simple model. The model
+is basically a state machine where for instance the table is a process where spatial changes
+such as the table rotating and elevating into position to receive an item is captured by the
+table having states for first entering that
+configuration\footnote{\texttt{enter\_load\_by\_feedbelt}} and then being in that
+configuration\footnote{\texttt{load\_by\_feedbelt}}. Certain constructs employed,
+such as modeling the belts through the use of channels may be seen as dubious but it
+appears to get the job done.
+
+\subsection*{Model parameters}
+The model consists of 13 variables, shown in listing \ref{lst:variables}, and
+7 processes; the two belt motors, the table, the press,
+the robot, the crane and the initial process.
+
+
+\begin{lstlisting}[caption={variables used},label={lst:variables}]
+chan feedbelt = [FEEDBELT_CAPACITY] of {bool};
+chan depositbelt = [DEPOSITBELT_CAPACITY] of {bool};
+mtype:table table_state;
+mtype:robot robot_state;
+mtype:press press_state;
+mtype:crane crane_state;
+
+bool on_table;
+bool in_gripper;
+bool in_arm1;
+bool in_arm2;
+bool in_press;
+\end{lstlisting}
+
+Here certain ``actors'' we are modelling have certain states that we
+capture with the different enumerated types/symbols shown in listing
+\ref{lst:actorstates}.
+
+\begin{lstlisting}[caption={actor states},label={lst:actorstates}]
+// Traveling crane states
+mtype:crane = {
+  move_to_feedbelt,
+  move_to_depositbelt,
+  at_feedbelt,
+  at_depositbelt
+};
+
+// Elevating rotary table, combining rotation and elevation
+mtype:table = {
+  enter_load_by_feedbelt,
+  enter_unload_to_arm1,
+  load_by_feedbelt,
+  unload_to_arm1
+};
+
+// Robot
+mtype:robot = {
+  enter_arm1_at_table,
+  enter_arm1_at_press,
+  enter_arm2_at_press,
+  enter_arm2_at_depositbelt,
+  arm1_at_table,
+  arm1_at_press,
+  arm2_at_press,
+  arm2_at_depositbelt  
+}
+
+mtype:press = {
+  load_by_arm1,
+  pressing,
+  unload_by_arm2
+}
+\end{lstlisting}
+If we want to count the total amount of assignments of values to these variables we see
+the crane, table, robot and press be in $4$,$4$,$8$, and $3$ different states respectively.
+The belts can be in $2^f$ and $2^d$ states when full\footnote{note the remark when full, as
+the belts actually have more states where they are not full} where $f$ and $d$ are the capacities of the feedbelt
+and depositbelt respectively. Additionally we have $5$ boolean variables which can have $2^5$ different assignments.
+This should give us an upper bound, assuming the belts
+are always full, of $4 \cdot 4 \cdot 8 \cdot 3 \cdot 2^f \cdot 2^d \cdot 2^5 = 12288 \cdot 2^{f+d}$ and if
+we pick a reasonably small capacity of $f=d=5$ for the belts we get $12582912$ different assignments of values
+or configurations. Each of these represents a different kripke label/node/world.
+
+\subsubsection*{Model operation}
+The model itself is rather self-explanatory as it is a rather simple state machine. The only construct that
+might require some additional explanation is the way the belts have been modelled. As mentioned we have used
+channels to model the belts. Items on the belt are represented by a channel(FIFO queue) of boolean values where true is
+an item and false is nothing(i.e an empty spot), in this way the belt is split into empty and filled spots. As the belt is a
+channel messages read will represent something being removed from the belt whereas messages written will represent putting
+something onto the belt. In addition to the channels themselves we have for each belt a process representing
+the motors driving the belts. In listing \ref{lst:belts} we see the process representing the feedbelt motor. It will
+model the advancement of the belt by writing empty values into the belt(false) and will discard empty values from
+the head or if a non-empty value is at the head, otherwise when there is an item at the head(true) it will
+remain in this state. Formerly we modeled the belt as updating a sensor boolean value, but have opted to represent
+this entirely through inspection of the channel as seen in listing \ref{lst:sensor}.
+\begin{lstlisting}[caption={Belts},label={lst:belts}]
+proctype feedbelt_motor()
+{
+  progress: do
+  :: if
+     :: atomic { full(feedbelt) && feedbelt?[false] -> feedbelt?_ }
+     :: atomic { nfull(feedbelt) -> feedbelt ! false }   
+     fi
+  od
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={belt sensor},label={lst:sensor}]
+#define feedbelt_sensor_triggered (full(feedbelt) && feedbelt?[true])
+\end{lstlisting}
+
+
+\subsubsection*{Some initial runs}
+A first run through the command \texttt{spin -search pcell-fixed.pml} lists out the ltl properties
+we have supplied as well as some diagnostics about the run. In particular we are greeted with
+the result (where ellipsis indicate snipped out results) 
+\begin{verbatim}
+$ spin -search pcell-fixed.pml
+  ...
+Warning: Search not completed
+	+ Partial Order Reduction
+...
+\end{verbatim}
+To understand partial order reduction, consider a much simpler model with $n$ concurrent processes spawning that each simply assign the same fixed value to
+$n$ unique global variables and then terminates. Let us name the variables $x_1,\ldots,x_n$ and consider them to initially have the assignment
+$S_0=\{x_1=0,\ldots,x_n=0\}$. The value the variables will eventually be assigned is $1$, but to get to there we can have
+$n!$ different assignment orders. A partial order reduction in this case is the recognition that any such assignment order will yield the same result so
+only one order need be considered. In general a partial order reduction is the recognition that certain paths in the state space all lead to the same state
+and so only one need be considered.
+
+\subsubsection*{Making progress}
+By inspection, that is by examining snapshots through for example observing a model run for 50 steps with
+\texttt{spin -50 pcell-fixed.pml}, we are convinced
+that the model appears to work as intended; an item is in the infinite circulation  of starting at the feed belt and then going to the to table, and then
+to robot arm one, and then to the press, and then to robot arm two, and then the to deposit belt, and then to the crane gripper and back to the feed belt.
+There is a mode of operation in spin that will detect cyclic behavior. By default any cyclic behavior will be reported
+as a so-called non-progress cycle. Consider the model in listing \ref{lst:progress} where we desire the behavior of a process endlessly flipping
+a boolean variable. In such a case we need to mark this process as making progress in one of its execution paths.
+
+\begin{lstlisting}[caption={Progress labeling},label={lst:progress}]
+bool on;
+
+active proctype flipflop()
+{
+  on = false;
+  do
+  :: on  -> on = false;
+  :: !on -> progress: on = true;
+  od
+}
+\end{lstlisting}
+
+We desire to do the same in our production cell model to
+assure ourselves of that any cycle in our processes pass through a progress label. This does
+not prove that a model is correct, just that there are no cycles that do not pass through
+a progress label. For our particular model as long as there is progress an item must be
+in circulation.
+\begin{verbatim}
+$ spin -a pcell-fixed.pml
+$ gcc -DNP -o pan pan.c   # progress cycle check enabled with -DNP
+$ ./pan -l -n -m20000     # -l enables non-progress cycle detection 
+                          # -n supresses unreached end states
+                          # -m20000 increases the default depth of 10k to 20k
+\end{verbatim}
+We obtain the run:
+\begin{verbatim}
+(Spin Version 6.5.1 -- 31 July 2020)
+	+ Partial Order Reduction
+
+Full statespace search for:
+	never claim         	+ (:np_:)
+	assertion violations	+ (if within scope of claim)
+	non-progress cycles 	+ (fairness disabled)
+	invalid end states	- (disabled by never claim)
+
+State-vector 92 byte, depth reached 10276, errors: 0
+    21550 states, stored (21570 visited)
+    84390 states, matched
+   105960 transitions (= visited+matched)
+    41840 atomic steps
+hash conflicts:      2964 (resolved)
+
+Stats on memory usage (in Megabytes):
+    2.466	equivalent memory usage for states (stored*(State-vector + overhead))
+    1.724	actual memory usage for states (compression: 69.91%)
+         	state-vector as stored = 56 byte + 28 byte overhead
+  128.000	memory used for hash table (-w24)
+    1.068	memory used for DFS stack (-m20000)
+  130.728	total actual memory usage
+\end{verbatim}
+In a former model we experienced a state space explosion in attempting to perform
+this check. This was found to be due to interleavings.
+
+
+\subsubsection*{Specifying and checking LTL properties}
+Since our model is pretty trivial it may be hard to really make meaningful checks. Most
+things are correct by construction.
+
+We opted to check the following:
+\begin{enumerate}
+\item
+\begin{verbatim}
+ltl advance_from_table { 
+([]<>on\_table -> []<>in_arm1 )
+}
+\end{verbatim}
+Interpretation: Always eventually there is an item on the table implies
+always eventually there is an item in arm one of the robot.
+\item
+\begin{verbatim}
+ltl piece_everywhere { 
+([]<>on_table && []<>in_gripper && 
+ []<>in_arm1 && []<>in_arm2 && []<>in_press )
+}
+\end{verbatim}
+Interpretation: Always eventually there is an item on the table and ... and always eventually there is an item in the press.
+\item
+\begin{verbatim}
+ltl crane_movement1 { 
+<>(crane_state == move_to_feedbelt) U (crane_state == at_feedbelt) 
+} 
+\end{verbatim}
+Interpretation: Eventually the crane is moving to the feedbelt until it is at the feedbelt
+\item
+\begin{verbatim}
+ltl piece_two_places { [](on_table -> in_gripper) }
+\end{verbatim}
+Interpretation: Always an item on the table imples an item in the gripper.
+\end{enumerate}
+
+For these we expect all but the latter to hold for the fixed configuration of the model of only one item in circulation.
+Indeed we obtain an assertion violation for this case. Here we proceed as follows:
+\begin{verbatim}
+$ spin -a pcell-fixed.pml
+$ gcc -o pan pan.c
+$ ./pan -a -NLTLRULE
+\end{verbatim}
+As expected we obtain for \texttt{./pan -Npiece\_two\_places} a result of:
+\begin{verbatim}
+pan: ltl formula piece_two_places
+pan:1: assertion violated  !( !(( !(on_table)||in_gripper))) (at depth 49)
+pan: wrote pcell-fixed.pml.trail
+
+(Spin Version 6.5.1 -- 31 July 2020)
+Warning: Search not completed
+	+ Partial Order Reduction
+
+Full statespace search for:
+	never claim         	+ (piece_two_places)
+	assertion violations	+ (if within scope of claim)
+	acceptance   cycles 	+ (fairness disabled)
+	invalid end states	- (disabled by never claim)
+
+State-vector 100 byte, depth reached 49, errors: 1
+       23 states, stored
+        0 states, matched
+       23 transitions (= stored+matched)
+        5 atomic steps
+hash conflicts:         0 (resolved)
+
+Stats on memory usage (in Megabytes):
+    0.003	equivalent memory usage for states (stored*(State-vector + overhead))
+    0.259	actual memory usage for states
+  128.000	memory used for hash table (-w24)
+    0.534	memory used for DFS stack (-m10000)
+  128.730	total actual memory usage
+
+
+
+pan: elapsed time 0 seconds
+\end{verbatim}
+For which we can verify that a violation was found by inspecting the generated trail of the run
+through
+\begin{verbatim}
+$ spin -t -p pcell-fixed.pml
+...
+		crane_state = at_depositbelt
+		on_table = 1
+		in_gripper = 0
+		in_arm1 = 0
+...
+\end{verbatim}
+When verifying a property that holds we observer a difference output, for example
+\texttt{./pan -Npiece\_everywhere} yields:
+\begin{verbatim}
+pan: ltl formula piece_everywhere
+pan:1: acceptance cycle (at depth 47)
+pan: wrote pcell-fixed.pml.trail
+
+(Spin Version 6.5.1 -- 31 July 2020)
+Warning: Search not completed
+	+ Partial Order Reduction
+
+Full statespace search for:
+	never claim         	+ (piece_everywhere)
+	assertion violations	+ (if within scope of claim)
+	acceptance   cycles 	+ (fairness disabled)
+	invalid end states	- (disabled by never claim)
+
+State-vector 100 byte, depth reached 52, errors: 1
+       25 states, stored
+        0 states, matched
+       25 transitions (= stored+matched)
+        7 atomic steps
+hash conflicts:         0 (resolved)
+
+Stats on memory usage (in Megabytes):
+    0.003	equivalent memory usage for states (stored*(State-vector + overhead))
+    0.259	actual memory usage for states
+  128.000	memory used for hash table (-w24)
+    0.534	memory used for DFS stack (-m10000)
+  128.730	total actual memory usage
+
+
+
+pan: elapsed time 0 seconds
+\end{verbatim}
+Here we note the term acceptance cycle and if we inspect the trail as before
+we are shown:
+\begin{verbatim}
+$ spin -t -p pcell-fixed.pml
+...
+ 47:	proc  3 (table:1) pcell-fixed.pml:99 (state 1) ...
+      <<<<<START OF CYCLE>>>>>
+ 49:	proc  2 (depositbelt_motor:1) pcell-fixed.pml:88 (state 1) ...
+ 50:	proc  2 (depositbelt_motor:1) pcell-fixed.pml:88 (state 2) ...
+ 52:	proc  2 (depositbelt_motor:1) pcell-fixed.pml:89 (state 4) ...
+ 53:	proc  2 (depositbelt_motor:1) pcell-fixed.pml:89 (state 5) ...
+spin: trail ends after 53 steps
+...
+\end{verbatim}
+Indicating that in a cycle starting as in step 49 the ltl property will always eventually
+hold.
+\subsubsection*{Where to find our model and conclusion}
+Our proposed model for the production cell can be found at \url{https://github.com/oab/youspinmeround}, the
+particular model used for this report is named \texttt{pcell-fixed.pml}.
+
+We've had a lot of trouble producing a model which had a desired resonably small statespace. Interleavings
+was likely the cause of this. It is also fairly easy to produce deadlocks when using channels, for
+instance we had initially written in the belts:
+\begin{verbatim}
+...
+:: nfull(depositbelt) -> atomic { depositbelt!false ;...}
+...
+\end{verbatim}
+Which will  deadlock if the branch is entered and then an interleaving causes \texttt{nfull(depositbelt)} to be
+invalidated(i.e. the channels becomes full) and \texttt{depositbelt!false} tries to write to the channel as well as
+another process.
+\end{document}
